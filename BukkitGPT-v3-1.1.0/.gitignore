@@ -1,0 +1,12 @@
+__pycache__
+/temp
+/build
+/logs
+test.py
+_config.yaml
+/codes
+/dev
+test.txt
+/test
+
+.env
