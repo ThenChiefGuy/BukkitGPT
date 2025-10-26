@@ -1,0 +1,64 @@
+name: Move subfolder to root
+
+on:
+  workflow_dispatch:
+    inputs:
+      subdir:
+        description: "Subdirectory to move into repo root"
+        required: false
+        default: "BukkitGPT-v3-1.1.0"
+
+permissions:
+  contents: write  # required to push the commit
+
+concurrency:
+  group: move-to-root
+  cancel-in-progress: false
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Move files to root
+        shell: bash
+        env:
+          SRC: ${{ github.event.inputs.subdir }}
+        run: |
+          set -euo pipefail
+          echo "Source directory: '$SRC'"
+          if [[ -z "$SRC" || ! -d "$SRC" ]]; then
+            echo "::error::Directory '$SRC' not found at repository root."
+            exit 1
+          fi
+
+          # Move everything from $SRC/ into repo root, keeping dotfiles, excluding .git and .github
+          rsync -av --remove-source-files \
+            --exclude='.git' \
+            --exclude='.github' \
+            "$SRC"/ ./
+
+          # Remove now-empty directories inside SRC and then the SRC folder itself
+          find "$SRC" -type d -empty -delete || true
+          rm -rf "$SRC"
+
+          # Stage changes
+          git add -A
+
+      - name: Commit & push (if changed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Move contents of '${{ github.event.inputs.subdir }}' to repo root"
+          # Push back to the same branch the workflow ran on
+          git push origin HEAD:"${GITHUB_REF_NAME}"
